@@ -44,6 +44,12 @@
     cursor: pointer; background: var(--line); color: var(--text); -webkit-tap-highlight-color: transparent; }
   button.primary { background: var(--accent); color: #fff; }
   button.stop { background: var(--danger); color: #fff; }
+  button:disabled { cursor: default; }
+  #toggle.busy { opacity: .8; }
+  .spin { display: inline-block; width: .95em; height: .95em; margin-right: .45em; vertical-align: -.12em;
+    border: 2.5px solid currentColor; border-right-color: transparent; border-radius: 50%;
+    animation: spin .8s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
   #toggle, #histBtn { flex: none; }
   .icon { flex: none; width: 42px; height: 40px; padding: 0; font-size: 19px; line-height: 1; }
   #moreBtn { display: none; }
@@ -548,6 +554,7 @@ function connect() {
     configSent = true;
     failStreak = 0;
     setStatus("слушаю", "live");
+    if (running && uiState !== "running") setRunningUI("running");
   };
   sock.onmessage = (ev) => {
     if (ws !== sock) return;
@@ -593,9 +600,26 @@ async function requestWakeLock() {
   if (wakeLock) return;
   try { wakeLock = await navigator.wakeLock?.request("screen"); wakeLock?.addEventListener("release", () => { wakeLock = null; }); } catch {}
 }
-function setRunningUI(on) {
-  $("#toggle").textContent = on ? "■ Стоп" : "▶ Старт";
-  $("#toggle").className = on ? "stop" : "primary";
+// кнопка: «▶ Старт» → спиннер «Подключаюсь…» (не нажимается) → «■ Стоп»
+let uiState = "idle", busyTimer = null;
+function setRunningUI(state) {
+  const b = $("#toggle");
+  clearTimeout(busyTimer);
+  uiState = state;
+  if (state === "starting") {
+    b.className = "primary busy"; b.disabled = true;
+    const sp = document.createElement("span"); sp.className = "spin";
+    b.replaceChildren(sp, "Подключаюсь…");
+    // если связь долго не поднимается — даём возможность остановить
+    busyTimer = setTimeout(() => { if (uiState === "starting" && running) setRunningUI("running"); }, 8000);
+  } else if (state === "running") {
+    b.className = "stop"; b.disabled = false; b.textContent = "■ Стоп";
+  } else {
+    b.className = "primary"; b.textContent = "▶ Старт";
+    // короткая пауза после «Стоп», чтобы двойное нажатие не запускало заново
+    b.disabled = true;
+    busyTimer = setTimeout(() => { b.disabled = false; }, 700);
+  }
 }
 
 async function start() {
@@ -603,15 +627,15 @@ async function start() {
   if ($("#langMe").value === $("#langThem").value) { setStatus("выбери два разных языка", "err"); return; }
   if (!getKey()) { pendingStart = true; openKeyBox(); return; }
   starting = true;
+  setRunningUI("starting");
   setStatus("включаю микрофон…");
   const ctx = makeCtx(); // создаём сразу (в обработчике нажатия): иначе браузер может оставить звук на паузе
   ctx.resume().catch(() => {});
   try { audio = await startAudio(ctx); }
-  catch (e) { starting = false; ctx.close().catch(() => {}); setStatus("нет доступа к микрофону: " + e.message, "err"); return; }
+  catch (e) { starting = false; ctx.close().catch(() => {}); setRunningUI("idle"); setStatus("нет доступа к микрофону: " + e.message, "err"); return; }
   starting = false;
   bc?.postMessage("started");
   running = true; userStopped = false; autoPaused = false; failStreak = 0; queue = []; lastAudioAt = Date.now();
-  setRunningUI(true);
   requestWakeLock();
   if (!(await ensureAudioRunning())) return;
   connect();
@@ -634,7 +658,7 @@ function stop(graceful = true) {
   } else flush();
   try { wakeLock?.release(); } catch {}
   wakeLock = null;
-  setRunningUI(false);
+  setRunningUI("idle");
   if (!$("#status").classList.contains("err")) setStatus("остановлено");
 }
 // недоделанные слова становятся окончательными, дальше — новая реплика
@@ -644,7 +668,11 @@ function flush() {
   render(); save();
 }
 
-$("#toggle").onclick = () => { closeMore(); if (running) { userStopped = true; stop(); } else start(); };
+$("#toggle").onclick = () => {
+  if ($("#toggle").disabled || starting) return;
+  closeMore();
+  if (running) { userStopped = true; stop(); } else start();
+};
 $("#clear").onclick = () => { closeMore(); newConversation(); setStatus(running ? "слушаю — новый разговор" : "новый разговор", running ? "live" : ""); };
 $("#download").onclick = () => downloadConv(currentConv());
 $("#moreBtn").onclick = () => {
