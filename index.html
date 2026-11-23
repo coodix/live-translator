@@ -2,7 +2,7 @@
 <html lang="ru">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Переводчик">
@@ -22,6 +22,7 @@
       --accent: #2563eb; --danger: #c93c37; --ok: #1a7f37; }
   }
   * { box-sizing: border-box; }
+  html { touch-action: pan-x pan-y; } /* без зума щипком и двойным тапом */
   html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text);
     font: 16px/1.35 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
   @supports (height: 100dvh) { body { height: 100dvh; } }
@@ -38,12 +39,14 @@
   select, input[type=text] { background: var(--bg); color: var(--text); border: 1px solid var(--line);
     border-radius: 8px; padding: 6px 8px; font-size: 14px; }
   input[type=text] { width: 110px; }
+  input[type=checkbox] { width: 18px; height: 18px; margin: 0; }
   button { border: 0; border-radius: 10px; padding: 9px 16px; font-size: 15px; font-weight: 600;
     cursor: pointer; background: var(--line); color: var(--text); -webkit-tap-highlight-color: transparent; }
   button.primary { background: var(--accent); color: #fff; }
   button.stop { background: var(--danger); color: #fff; }
-  #toggle { flex: none; }
-  #moreBtn { display: none; flex: none; width: 42px; height: 40px; padding: 0; font-size: 20px; line-height: 1; }
+  #toggle, #histBtn { flex: none; }
+  .icon { flex: none; width: 42px; height: 40px; padding: 0; font-size: 19px; line-height: 1; }
+  #moreBtn { display: none; }
   header.open #moreBtn { background: var(--accent); color: #fff; }
   #status { font-size: 13px; color: var(--muted); flex: 1; min-width: 0; }
   #status.err { color: var(--danger); }
@@ -51,7 +54,7 @@
   #meter { flex: none; width: 70px; height: 8px; background: var(--line); border-radius: 4px; overflow: hidden; }
   #meter > div { height: 100%; width: 0; background: var(--ok); transition: width .08s; }
   .spacer { flex: 1; }
-  #log { flex: 1; overflow-y: auto; padding: 18px; display: flex; flex-direction: column; gap: 14px;
+  .log { flex: 1; overflow-y: auto; padding: 18px; display: flex; flex-direction: column; gap: 14px;
     padding-bottom: calc(18px + env(safe-area-inset-bottom)); -webkit-overflow-scrolling: touch; }
   .msg { max-width: 80%; padding: 10px 16px 12px; border-radius: 16px; overflow-wrap: anywhere; }
   .msg.me { align-self: flex-start; background: var(--me); border-bottom-left-radius: 4px; }
@@ -62,42 +65,65 @@
   .msg.pending .tr::after { content: " …"; color: var(--muted); }
   .tr:empty::before { content: "…"; color: var(--muted); }
   #hint { color: var(--muted); text-align: center; margin: auto; max-width: 520px; font-size: 15px; }
-  /* телефон: сверху только «Старт», статус и ⚙; языки — одной строкой; остальное — в меню ⚙ */
+  #hint[hidden] { display: none; }
+
+  /* поверх страницы: ключ, «нажми, чтобы слушать», история */
+  .overlay { position: fixed; inset: 0; z-index: 10; display: flex; align-items: center; justify-content: center;
+    padding: 16px; background: rgba(0,0,0,.55); }
+  .overlay[hidden] { display: none; }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 18px;
+    width: 100%; max-width: 440px; display: flex; flex-direction: column; gap: 12px; }
+  .card p { margin: 0; color: var(--muted); font-size: 14px; }
+  .card p.err { color: var(--danger); }
+  #keyInput { width: 100%; font-size: 16px; padding: 10px; background: var(--bg); color: var(--text);
+    border: 1px solid var(--line); border-radius: 8px; }
+  .row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+  #tapBox { cursor: pointer; }
+  #tapBox .big { font-size: 22px; padding: 22px 28px; border-radius: 16px; background: var(--accent); color: #fff;
+    font-weight: 700; text-align: center; }
+  #histBox { z-index: 8; padding: 0; background: var(--bg); flex-direction: column; align-items: stretch; justify-content: flex-start; }
+  .hbar { display: flex; gap: 8px; align-items: center; padding: 10px 14px;
+    padding-top: max(10px, env(safe-area-inset-top));
+    padding-left: max(14px, env(safe-area-inset-left)); padding-right: max(14px, env(safe-area-inset-right));
+    background: var(--panel); border-bottom: 1px solid var(--line); }
+  .hbar b { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .hbar [hidden] { display: none; }
+  #histList { flex: 1; overflow-y: auto; padding: 6px 14px calc(14px + env(safe-area-inset-bottom)); }
+  #histList[hidden], #histView[hidden] { display: none; }
+  .hitem { display: block; width: 100%; text-align: left; background: var(--panel); border: 1px solid var(--line);
+    border-radius: 12px; padding: 12px 14px; margin: 8px 0; font-weight: 400; }
+  .hitem .t { font-weight: 600; }
+  .hitem .m { color: var(--muted); font-size: 13px; margin-top: 2px; }
+  .hitem .p { margin-top: 6px; font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .empty { color: var(--muted); text-align: center; margin-top: 40px; }
+
+  /* телефон: сверху «Старт», статус, история и ⚙; языки — одной строкой; остальное — в меню ⚙ */
   @media (max-width: 640px) {
     header { flex-direction: column; align-items: stretch; gap: 8px; padding: 8px 10px;
       padding-top: max(8px, env(safe-area-inset-top));
       padding-left: max(10px, env(safe-area-inset-left)); padding-right: max(10px, env(safe-area-inset-right)); }
-    .bar { flex: none; gap: 10px; }
+    .bar { flex: none; gap: 8px; }
     #toggle { padding: 9px 14px; font-size: 16px; }
-    #meter { width: 34px; }
+    #meter { width: 30px; }
     #status { font-size: 13px; line-height: 1.25; display: -webkit-box; -webkit-line-clamp: 2;
       -webkit-box-orient: vertical; overflow: hidden; }
     #moreBtn { display: block; }
+    #histBtn { width: 42px; height: 40px; padding: 0; font-size: 19px; }
+    #histBtn .lbl { display: none; }
     .langs { display: grid; grid-template-columns: 1fr auto 1fr; gap: 6px; align-items: end; }
     .langs label { flex-direction: column; align-items: stretch; gap: 2px; font-size: 11px; }
     .langs select { width: 100%; }
     .swap { padding-bottom: 9px; }
     select, input[type=text] { font-size: 16px; padding: 7px 8px; } /* <16px — iOS зумит страницу при тапе */
-    .more { display: none; gap: 8px; padding-top: 2px; }
+    .more { display: none; gap: 10px 12px; padding-top: 2px; }
     header.open .more { display: flex; }
-    .more label:has(#fs) { flex: 1 1 100%; font-size: 13px; }
-    .more #fs { flex: 1; }
-    .more label:has(#model) { flex: 1 1 100%; font-size: 13px; }
-    .more #model { flex: 1; }
+    .more label { font-size: 13px; }
+    .more label:has(#fs), .more label:has(#model) { flex: 1 1 100%; }
+    .more #fs, .more #model { flex: 1; }
     .more button { flex: 1; padding: 9px 8px; font-size: 15px; }
     .msg { max-width: 92%; padding: 8px 12px 10px; }
-    #log { padding: 12px; gap: 10px; padding-bottom: calc(12px + env(safe-area-inset-bottom)); }
+    .log { padding: 12px; gap: 10px; padding-bottom: calc(12px + env(safe-area-inset-bottom)); }
   }
-  #keyBox { position: fixed; inset: 0; background: rgba(0,0,0,.55); display: flex; align-items: center;
-    justify-content: center; padding: 16px; z-index: 10; }
-  #keyBox[hidden] { display: none; }
-  #keyBox .card { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 18px;
-    width: 100%; max-width: 440px; display: flex; flex-direction: column; gap: 12px; }
-  #keyBox p { margin: 0; color: var(--muted); font-size: 14px; }
-  #keyBox p.err { color: var(--danger); }
-  #keyBox input { width: 100%; font-size: 16px; padding: 10px; background: var(--bg); color: var(--text);
-    border: 1px solid var(--line); border-radius: 8px; }
-  #keyBox .row { display: flex; gap: 8px; flex-wrap: wrap; }
 </style>
 </head>
 <body>
@@ -106,7 +132,8 @@
     <button id="toggle" class="primary">▶ Старт</button>
     <div id="meter"><div></div></div>
     <span id="status">остановлено</span>
-    <button id="moreBtn" aria-label="Настройки" aria-expanded="false">⚙︎</button>
+    <button id="histBtn" aria-label="История"><span class="ic">🕘</span><span class="lbl"> История</span></button>
+    <button id="moreBtn" class="icon" aria-label="Настройки" aria-expanded="false">⚙︎</button>
   </div>
   <div class="langs">
     <label>Я говорю <select id="langMe"></select></label>
@@ -115,69 +142,113 @@
   </div>
   <div class="more">
     <label>Шрифт <input id="fs" type="range" min="16" max="48" value="28"></label>
+    <label>Новая реплика после паузы <select id="pause">
+      <option value="2000">2 с</option><option value="3000">3 с</option><option value="4000">4 с</option>
+      <option value="5000">5 с</option><option value="8000">8 с</option><option value="0">не делить</option>
+    </select></label>
+    <label><input id="auto" type="checkbox"> Автостарт</label>
     <label>Модель <input id="model" type="text" value="stt-rt-v6"></label>
     <button id="download">⬇ Скачать</button>
     <button id="clear">Новый</button>
     <button id="keyBtn">Ключ</button>
   </div>
 </header>
-<div id="log"><div id="hint">Нажми «Старт» и положи ноутбук или телефон между вами. Слева твои реплики (крупно — перевод для собеседника), справа — собеседника (крупно — перевод для тебя). Язык определяется сам, ничего переключать не нужно.</div></div>
-<div id="keyBox" hidden><div class="card">
+<div id="log" class="log"><div id="hint">Положи телефон или ноутбук между вами. Слева твои реплики (крупно — перевод для собеседника), справа — собеседника (крупно — перевод для тебя). Язык определяется сам. При открытии страница сразу начинает слушать (выключить: ⚙ → Автостарт).</div></div>
+
+<div id="keyBox" class="overlay" hidden><div class="card">
   <b>Ключ Soniox</b>
-  <p id="keyMsg">Хранится только в этом браузере на этом устройстве. Взять: console.soniox.com → API Keys.</p>
+  <p id="keyMsg"></p>
   <input id="keyInput" type="password" autocomplete="off" data-1p-ignore data-lpignore="true" autocapitalize="off" spellcheck="false" placeholder="вставь ключ">
   <div class="row"><button id="keySave" class="primary">Сохранить</button><button id="keyCancel">Отмена</button><span class="spacer"></span><button id="keyForget">Удалить ключ</button></div>
 </div></div>
 
+<div id="tapBox" class="overlay" hidden><div class="big">🎤 Нажми, чтобы начать слушать</div></div>
+
+<div id="histBox" class="overlay" hidden>
+  <div class="hbar">
+    <button id="histBack">← Назад</button>
+    <b id="histTitle">История</b>
+    <button id="histDl" hidden>⬇</button>
+    <button id="histDel" hidden>Удалить</button>
+  </div>
+  <div id="histList"></div>
+  <div id="histView" class="log" hidden></div>
+</div>
+
 <script>
 const LANGS = { ru: "Русский", tr: "Türkçe", en: "English", uk: "Українська", de: "Deutsch", es: "Español", sl: "Slovenščina", th: "ไทย" };
 const WS_URL = "wss://stt-rt.soniox.com/transcribe-websocket";
+const LONG_AWAY_MS = 10 * 60 * 1000; // дольше — при возврате начинается новый разговор
 const $ = (s) => document.querySelector(s);
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const store = {
   get(k, d) { try { return localStorage.getItem(k) ?? d; } catch { return d; } },
-  set(k, v) { try { localStorage.setItem(k, v); } catch {} },
+  set(k, v) { try { localStorage.setItem(k, v); return true; } catch { return false; } },
+  del(k) { try { localStorage.removeItem(k); } catch {} },
 };
+const params = new URLSearchParams(location.search);
+const DEMO = params.has("demo");
+const MOBILE = matchMedia("(pointer: coarse)").matches;
 
+// ---------- настройки ----------
 for (const sel of [$("#langMe"), $("#langThem")])
   for (const [code, name] of Object.entries(LANGS)) sel.add(new Option(`${name} (${code})`, code));
 $("#langMe").value = store.get("langMe", "ru");
 $("#langThem").value = store.get("langThem", "tr");
 $("#model").value = store.get("model", "stt-rt-v6");
+$("#pause").value = store.get("pauseMs", "3000");
+$("#auto").checked = store.get("autostart", "1") === "1";
 $("#fs").value = store.get("fs", innerWidth <= 640 ? "24" : "28");
 const applyFs = () => document.documentElement.style.setProperty("--fs", $("#fs").value);
 applyFs();
 $("#fs").oninput = () => { applyFs(); store.set("fs", $("#fs").value); };
-for (const id of ["langMe", "langThem", "model"]) $("#" + id).onchange = () => store.set(id, $("#" + id).value);
+for (const id of ["langMe", "langThem", "model"]) $("#" + id).onchange = () => { store.set(id, $("#" + id).value); render(); };
+$("#pause").onchange = () => { store.set("pauseMs", $("#pause").value); render(); };
+$("#auto").onchange = () => store.set("autostart", $("#auto").checked ? "1" : "0");
+const pauseMs = () => Number($("#pause").value) || 0;
+const autoStartOn = () => !DEMO && (params.has("start") || (!params.has("nostart") && $("#auto").checked));
+const getKey = () => store.get("sonioxKey", "").trim();
 
-// ---------- state ----------
-let running = false, ws = null, audio = null, wakeLock = null;
+// iPhone: щипок и двойной тап не увеличивают страницу (Safari игнорирует user-scalable=no)
+for (const ev of ["gesturestart", "gesturechange", "gestureend"])
+  document.addEventListener(ev, (e) => e.preventDefault(), { passive: false });
+document.addEventListener("touchmove", (e) => { if (e.touches.length > 1) e.preventDefault(); }, { passive: false });
+
+// ---------- состояние ----------
+let running = false, starting = false, userStopped = false, autoPaused = false;
+let ws = null, audio = null, wakeLock = null, waitingTap = null, restarting = false;
 let finals = [], nonFinal = [];
 let queue = [], configSent = false, authViaConfig = false, reconnectTimer = null, failStreak = 0;
-let dirty = false, lastAudioAt = 0, lastSentAt = 0, micWarn = false;
-const DEMO = location.search.includes("demo");
+let dirty = false, lastAudioAt = 0, lastSentAt = 0, micWarn = false, hiddenAt = 0;
 const pad = (n) => String(n).padStart(2, "0");
-const newSessionName = (d = new Date()) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}_${pad(d.getHours())}-${pad(d.getMinutes())}`;
-let sessionName = newSessionName();
-const getKey = () => store.get("sonioxKey", "").trim();
+const newSession = (d = new Date()) => ({
+  at: d.getTime(),
+  name: `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}_${pad(d.getHours())}-${pad(d.getMinutes())}-${pad(d.getSeconds())}`,
+});
+let session = newSession();
 // только одна вкладка слушает микрофон: новая останавливает старую
 const bc = "BroadcastChannel" in window ? new BroadcastChannel("live-translator") : null;
-if (bc) bc.onmessage = (e) => { if (e.data === "started" && running) { stop(); setStatus("остановлено: запущено в другой вкладке", "err"); } };
+if (bc) bc.onmessage = (e) => {
+  if (e.data === "started" && running) { userStopped = true; stop(); setStatus("остановлено: запущено в другой вкладке", "err"); }
+};
 
 function setStatus(text, cls = "") { const s = $("#status"); s.textContent = text; s.className = cls; }
 
-// ---------- segments ----------
-function sideOf(lang) { return lang === $("#langMe").value ? "me" : "them"; }
-
-function buildSegments(tokens) {
-  const A = $("#langMe").value, B = $("#langThem").value;
+// ---------- реплики ----------
+// Новая реплика начинается, когда сменился язык, или тот же язык продолжился после паузы
+// (по времени слов в аудио), или очень длинная реплика дошла до конца фразы.
+// Перевод цепляется к последней реплике своего исходного языка: Soniox присылает перевод
+// фразы раньше первого слова следующей, так что после паузы он не уезжает в новую реплику.
+function buildSegments(tokens, A = $("#langMe").value, B = $("#langThem").value) {
+  const sideOf = (lang) => (lang === A ? "me" : "them");
+  const gap = pauseMs();
   const segs = [];
   let cur = null, sawEnd = false;
   for (const t of tokens) {
     if (t.boundary) { cur = null; continue; }
     if (t.text === "<end>" || t.text === "<fin>") { sawEnd = true; continue; }
     if (t.translation_status === "translation") {
-      const src = t.source_language || (t.language === A ? B : A);
-      const side = sideOf(src);
+      const side = sideOf(t.source_language || (t.language === A ? B : A));
       for (let i = segs.length - 1; i >= 0 && i >= segs.length - 8; i--) {
         if (segs[i].side === side) { segs[i].trans += t.text; if (!t.is_final) segs[i].pending = true; break; }
       }
@@ -187,95 +258,175 @@ function buildSegments(tokens) {
     const lang = t.language || (cur && cur.lang) || A;
     const side = sideOf(lang);
     const longAndEnded = cur && sawEnd && cur.orig.length > 350;
-    if (!cur || (!blank && (side !== cur.side || longAndEnded))) {
+    const paused = gap && cur && cur.lastEnd != null && t.start_ms != null && t.start_ms - cur.lastEnd >= gap;
+    if (!cur || (!blank && (side !== cur.side || longAndEnded || paused))) {
       if (blank) continue;
-      cur = { side, lang, speaker: t.speaker, orig: "", trans: "", pending: false };
+      cur = { side, lang, speaker: t.speaker, orig: "", trans: "", pending: false, lastEnd: null };
       segs.push(cur);
       sawEnd = false;
     }
     cur.orig += t.text;
+    if (!blank && t.end_ms != null) cur.lastEnd = t.end_ms;
     if (!t.is_final) cur.pending = true;
   }
   for (const s of segs) { s.orig = s.orig.trim(); s.trans = s.trans.trim(); }
   return segs;
 }
 
-// ---------- render ----------
+function makeBubble() {
+  const n = document.createElement("div");
+  for (const c of ["who", "tr", "orig"]) { const d = document.createElement("div"); d.className = c; n.append(d); }
+  return n;
+}
+function fillBubble(n, s, A, B) {
+  const cls = `msg ${s.side}${s.pending ? " pending" : ""}`;
+  if (n.className !== cls) n.className = cls;
+  const who = s.side === "me" ? `Я · ${A} → ${B}` : `Собеседник${s.speaker ? " " + s.speaker : ""} · ${s.lang} → ${A}`;
+  if (n.children[0].textContent !== who) n.children[0].textContent = who;
+  if (n.children[1].textContent !== s.trans) n.children[1].textContent = s.trans;
+  if (n.children[2].textContent !== s.orig) n.children[2].textContent = s.orig;
+}
+
 const nodes = [];
 function render() {
   const log = $("#log");
   const atBottom = log.scrollHeight - log.scrollTop - log.clientHeight < 80;
-  const segs = buildSegments(finals.concat(nonFinal));
-  if (segs.length && $("#hint")) $("#hint").remove();
   const A = $("#langMe").value, B = $("#langThem").value;
+  const segs = buildSegments(finals.concat(nonFinal), A, B);
+  $("#hint").hidden = segs.length > 0;
   segs.forEach((s, i) => {
-    let n = nodes[i];
-    if (!n) {
-      n = document.createElement("div");
-      n.innerHTML = '<div class="who"></div><div class="tr"></div><div class="orig"></div>';
-      log.appendChild(n); nodes[i] = n;
-    }
-    const cls = `msg ${s.side}${s.pending ? " pending" : ""}`;
-    if (n.className !== cls) n.className = cls;
-    const who = s.side === "me"
-      ? `Я · ${A} → ${B}`
-      : `Собеседник${s.speaker ? " " + s.speaker : ""} · ${s.lang} → ${A}`;
-    if (n.children[0].textContent !== who) n.children[0].textContent = who;
-    if (n.children[1].textContent !== s.trans) n.children[1].textContent = s.trans;
-    if (n.children[2].textContent !== s.orig) n.children[2].textContent = s.orig;
+    if (!nodes[i]) { nodes[i] = makeBubble(); log.appendChild(nodes[i]); }
+    fillBubble(nodes[i], s, A, B);
   });
   while (nodes.length > segs.length) nodes.pop().remove();
   if (atBottom) log.scrollTop = log.scrollHeight;
   dirty = true;
 }
 
-// ---------- сохранение: текущий разговор живёт в localStorage, «Скачать» отдаёт .md ----------
-function toMarkdown() {
-  const segs = buildSegments(finals.concat(nonFinal));
-  const lines = [`# Разговор ${sessionName.replace("_", " ")}`, ""];
-  for (const s of segs) {
+// ---------- текущий разговор и история (всё в localStorage этого браузера) ----------
+function currentConv() {
+  const A = $("#langMe").value, B = $("#langThem").value;
+  const segs = buildSegments(finals.concat(nonFinal), A, B)
+    .map(({ side, lang, speaker, orig, trans }) => ({ side, lang, speaker, orig, trans }));
+  return { at: session.at, name: session.name, langs: [A, B], segs };
+}
+function save() {
+  if (DEMO || !dirty) return;
+  dirty = false;
+  const c = currentConv();
+  if (c.segs.length) store.set("conv", JSON.stringify(c)); else store.del("conv");
+}
+setInterval(save, 5000);
+addEventListener("pagehide", () => { dirty = true; save(); });
+
+function loadHist() {
+  try { const h = JSON.parse(store.get("hist", "[]")); return Array.isArray(h) ? h : []; } catch { return []; }
+}
+function saveHist(h) {
+  // не влезает в localStorage — выкидываем самые старые разговоры
+  while (!store.set("hist", JSON.stringify(h))) { if (h.length <= 1) return false; h.pop(); }
+  return true;
+}
+// приводим к одному виду и разговоры, сохранённые прошлой версией страницы (без at/langs/side)
+function normConv(c) {
+  if (!c || !Array.isArray(c.segs) || !c.segs.length) return null;
+  const langs = Array.isArray(c.langs) && c.langs.length === 2 ? c.langs : [$("#langMe").value, $("#langThem").value];
+  const m = /^(\d{4})-(\d\d)-(\d\d)_(\d\d)-(\d\d)(?:-(\d\d))?/.exec(c.name || "");
+  const at = typeof c.at === "number" ? c.at
+    : m ? new Date(+m[1], m[2] - 1, +m[3], +m[4], +m[5], +(m[6] || 0)).getTime() : Date.now();
+  return { at, name: c.name || newSession(new Date(at)).name, langs,
+    segs: c.segs.map((s) => ({ side: s.side || (s.lang === langs[0] ? "me" : "them"), lang: s.lang,
+      speaker: s.speaker, orig: s.orig || "", trans: s.trans || "" })) };
+}
+function archive(c) {
+  c = normConv(c);
+  if (!c) return;
+  const h = loadHist().filter((x) => x.at !== c.at);
+  h.unshift(c);
+  h.sort((a, b) => b.at - a.at);
+  if (h.length > 300) h.length = 300;
+  saveHist(h);
+}
+// текущий разговор уходит в историю, экран начинается с чистого листа
+function newConversation() {
+  if (!DEMO) { archive(currentConv()); store.del("conv"); }
+  finals = []; nonFinal = []; session = newSession();
+  render(); dirty = false;
+}
+
+function toMarkdown(c) {
+  const lines = [`# Разговор ${fmtWhen(c.at)} (${c.langs.join(" ⇄ ")})`, ""];
+  for (const s of c.segs) {
     lines.push(`**${s.side === "me" ? "Я" : "Собеседник"} (${s.lang}):** ${s.orig}`);
     lines.push(`> ${s.trans || "—"}`, "");
   }
   return lines.join("\n");
 }
-function save() {
-  if (DEMO || !dirty) return;
-  dirty = false;
-  const segs = buildSegments(finals).map(({ side, lang, speaker, orig, trans }) => ({ lang, speaker, orig, trans }));
-  store.set("conv", JSON.stringify({ name: sessionName, segs }));
-}
-setInterval(save, 5000);
-function restore() {
-  if (DEMO) return;
-  let c; try { c = JSON.parse(store.get("conv", "null")); } catch { return; }
-  if (!c || !Array.isArray(c.segs) || !c.segs.length) return;
-  sessionName = c.name || sessionName;
-  const A = $("#langMe").value, B = $("#langThem").value;
-  for (const s of c.segs) {
-    finals.push({ text: s.orig, language: s.lang, speaker: s.speaker, is_final: true, translation_status: "original" });
-    if (s.trans) finals.push({ text: s.trans, source_language: s.lang, language: s.lang === A ? B : A, is_final: true, translation_status: "translation" });
-    finals.push({ boundary: true, text: "" });
-  }
-  render(); dirty = false;
-}
-function download() {
-  if (!finals.length && !nonFinal.length) { setStatus("разговор пустой — нечего скачивать", "err"); return; }
-  const url = URL.createObjectURL(new Blob([toMarkdown()], { type: "text/markdown;charset=utf-8" }));
+function downloadConv(c) {
+  if (!c || !c.segs.length) { setStatus("разговор пустой — нечего скачивать", "err"); return; }
+  const url = URL.createObjectURL(new Blob([toMarkdown(c)], { type: "text/markdown;charset=utf-8" }));
   const a = document.createElement("a");
-  a.href = url; a.download = `perevod_${sessionName}.md`;
+  a.href = url; a.download = `perevod_${c.name}.md`;
   document.body.appendChild(a); a.click(); a.remove();
   setTimeout(() => URL.revokeObjectURL(url), 10000);
 }
+const fmtWhen = (ts) => new Date(ts).toLocaleString("ru-RU",
+  { weekday: "short", day: "numeric", month: "long", year: "numeric", hour: "2-digit", minute: "2-digit" });
+const plural = (n, f) => f[(n % 10 === 1 && n % 100 !== 11) ? 0 : (n % 10 >= 2 && n % 10 <= 4 && (n % 100 < 10 || n % 100 >= 20)) ? 1 : 2];
 
-// ---------- audio ----------
-// ctx создаётся заранее, прямо в обработчике клика: иначе Chrome может оставить его на паузе
+let viewing = null;
+function el(tag, cls, text) { const e = document.createElement(tag); e.className = cls; e.textContent = text; return e; }
+function showHistList() {
+  viewing = null;
+  $("#histTitle").textContent = "История";
+  $("#histDl").hidden = $("#histDel").hidden = true;
+  $("#histView").hidden = true;
+  const list = $("#histList");
+  list.hidden = false;
+  list.replaceChildren();
+  const h = loadHist();
+  if (!h.length) list.append(el("p", "empty", "Пока пусто. Разговор попадает сюда, когда начинаешь новый или заново открываешь страницу."));
+  for (const c of h) {
+    const b = el("button", "hitem", "");
+    const first = c.segs.find((s) => s.orig) || c.segs[0];
+    b.append(el("div", "t", fmtWhen(c.at)),
+      el("div", "m", `${c.langs.join(" ⇄ ")} · ${c.segs.length} ${plural(c.segs.length, ["реплика", "реплики", "реплик"])}`),
+      el("div", "p", first ? first.orig : ""));
+    b.onclick = () => showConv(c.at);
+    list.append(b);
+  }
+}
+function showConv(at) {
+  const c = loadHist().find((x) => x.at === at);
+  if (!c) return showHistList();
+  viewing = at;
+  $("#histTitle").textContent = fmtWhen(c.at);
+  $("#histDl").hidden = $("#histDel").hidden = false;
+  $("#histList").hidden = true;
+  const v = $("#histView");
+  v.hidden = false;
+  v.replaceChildren();
+  const [A, B] = c.langs;
+  for (const s of c.segs) { const n = makeBubble(); fillBubble(n, s, A, B); v.append(n); }
+  v.scrollTop = 0;
+}
+$("#histBtn").onclick = () => { closeMore(); save(); showHistList(); $("#histBox").hidden = false; };
+$("#histBack").onclick = () => { if (viewing != null) showHistList(); else $("#histBox").hidden = true; };
+$("#histDl").onclick = () => downloadConv(loadHist().find((x) => x.at === viewing));
+$("#histDel").onclick = () => {
+  if (!confirm("Удалить этот разговор из истории?")) return;
+  saveHist(loadHist().filter((x) => x.at !== viewing));
+  showHistList();
+};
+
+// ---------- звук ----------
 function makeCtx() { try { return new AudioContext({ sampleRate: 16000 }); } catch { return new AudioContext(); } }
 async function startAudio(ctx) {
   const stream = await navigator.mediaDevices.getUserMedia({
     audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true, autoGainControl: true },
   });
-  if (ctx.state !== "running") { try { await ctx.resume(); } catch {} }
+  // без нажатия браузер может не дать звук: resume() тогда висит — не ждём его дольше 300 мс
+  if (ctx.state !== "running") await Promise.race([ctx.resume().catch(() => {}), sleep(300)]);
   const src = ctx.createMediaStreamSource(stream);
   const proc = ctx.createScriptProcessor(2048, 1, 1);
   const bar = $("#meter > div");
@@ -295,27 +446,49 @@ async function startAudio(ctx) {
   src.connect(proc); proc.connect(ctx.destination);
   return {
     ctx, stream, sampleRate: ctx.sampleRate,
-    stop() { proc.disconnect(); src.disconnect(); stream.getTracks().forEach((t) => t.stop()); ctx.close(); bar.style.width = "0"; },
+    stop() { proc.disconnect(); src.disconnect(); stream.getTracks().forEach((t) => t.stop()); ctx.close().catch(() => {}); bar.style.width = "0"; },
   };
 }
 
-// сторож: если звук перестал идти (Chrome приостановил аудио, сменился микрофон) — оживить;
+// при автостарте без нажатия браузер может держать звук на паузе — просим один тап
+async function ensureAudioRunning() {
+  const ctx = audio && audio.ctx;
+  if (!ctx) return false;
+  if (ctx.state === "running") return true;
+  await Promise.race([ctx.resume().catch(() => {}), sleep(400)]);
+  if (ctx.state === "running") return true;
+  setStatus("нажми на экран, чтобы начать слушать");
+  $("#tapBox").hidden = false;
+  await new Promise((resolve) => { waitingTap = resolve; });
+  $("#tapBox").hidden = true;
+  lastAudioAt = Date.now();
+  return running && !!audio && audio.ctx.state === "running";
+}
+$("#tapBox").onclick = async () => {
+  try { await audio?.ctx.resume(); } catch {}
+  const r = waitingTap; waitingTap = null; r?.();
+};
+
+// сторож: если звук перестал идти (браузер приостановил аудио, сменился микрофон) — оживить;
 // keepalive не даёт Soniox закрыть сессию с 408, пока звука нет
 setInterval(async () => {
-  if (!running || !audio) return;
   const now = Date.now();
-  if (now - lastAudioAt > 3000) {
+  if (running && !waitingTap && !restarting && !document.hidden && (!audio || now - lastAudioAt > 3000)) {
     micWarn = true;
     setStatus("микрофон молчит — перезапускаю звук…", "err");
-    try { if (audio.ctx.state !== "running") await audio.ctx.resume(); } catch {}
-    const ended = audio.stream.getAudioTracks().every((t) => t.readyState === "ended");
-    if (running && (ended || now - lastAudioAt > 8000)) {
-      try { audio.stop(); } catch {}
+    const ended = !audio || audio.stream.getAudioTracks().every((t) => t.readyState === "ended");
+    if (!ended && audio.ctx.state !== "running") {
+      await ensureAudioRunning();
+    } else if (ended || now - lastAudioAt > 8000) {
+      restarting = true;
+      try { audio?.stop(); } catch {}
+      audio = null;
       lastAudioAt = Date.now();
-      try { audio = await startAudio(makeCtx()); }
+      try { audio = await startAudio(makeCtx()); await ensureAudioRunning(); }
       catch (e) { setStatus("микрофон: " + e.message, "err"); }
+      restarting = false;
     }
-  } else if (micWarn && ws && ws.readyState === WebSocket.OPEN && configSent) {
+  } else if (micWarn && running && ws && ws.readyState === WebSocket.OPEN && configSent) {
     micWarn = false;
     setStatus("слушаю", "live");
   }
@@ -335,7 +508,7 @@ function sendAudio(buf) {
   }
 }
 
-// ---------- websocket ----------
+// ---------- Soniox ----------
 function connect() {
   clearTimeout(reconnectTimer);
   configSent = false;
@@ -344,6 +517,10 @@ function connect() {
   if (!key) { stop(false); setStatus("нет ключа Soniox", "err"); openKeyBox(); return; }
   setStatus("подключаюсь…");
   if (ws) { const old = ws; ws = null; try { old.close(); } catch {} }
+  // новая сессия Soniox считает время слов с нуля — начинаем с новой реплики
+  if (nonFinal.length || (finals.length && !finals[finals.length - 1].boundary)) {
+    finals = finals.concat(nonFinal); nonFinal = []; finals.push({ boundary: true, text: "" });
+  }
   const sock = authViaConfig ? new WebSocket(WS_URL) : new WebSocket(WS_URL, ["soniox-api-key", key]);
   ws = sock;
   let opened = false;
@@ -352,7 +529,7 @@ function connect() {
     const A = $("#langMe").value, B = $("#langThem").value;
     const cfg = {
       model: $("#model").value.trim() || "stt-rt-v6",
-      audio_format: "pcm_s16le", sample_rate: audio.sampleRate, num_channels: 1,
+      audio_format: "pcm_s16le", sample_rate: audio ? audio.sampleRate : 16000, num_channels: 1,
       language_hints: [A, B],
       enable_language_identification: true,
       enable_speaker_diarization: true,
@@ -372,10 +549,9 @@ function connect() {
       const code = Number(msg.error_code);
       const text = `Soniox ${code || ""}: ${msg.error_message || msg.error_type}`;
       if ([400, 401, 402, 403].includes(code)) {
-        stop(false); setStatus(text, "err");
+        userStopped = true; stop(false); setStatus(text, "err");
         if (code === 401) openKeyBox("Ключ не подошёл (Soniox 401). Вставь действующий ключ.");
-      }
-      else setStatus(`${text} — переподключаюсь`, "err");
+      } else setStatus(`${text} — переподключаюсь`, "err");
       return;
     }
     const nf = [];
@@ -405,56 +581,93 @@ function scheduleReconnect() {
   reconnectTimer = setTimeout(connect, delay);
 }
 
-// ---------- start / stop ----------
+// ---------- старт / стоп ----------
+async function requestWakeLock() {
+  if (wakeLock) return;
+  try { wakeLock = await navigator.wakeLock?.request("screen"); wakeLock?.addEventListener("release", () => { wakeLock = null; }); } catch {}
+}
+function setRunningUI(on) {
+  $("#toggle").textContent = on ? "■ Стоп" : "▶ Старт";
+  $("#toggle").className = on ? "stop" : "primary";
+}
+
 async function start() {
-  if (running) return;
+  if (running || starting || DEMO) return;
   if ($("#langMe").value === $("#langThem").value) { setStatus("выбери два разных языка", "err"); return; }
-  if (!getKey()) { openKeyBox(); pendingStart = true; return; }
-  const ctx = makeCtx();
+  if (!getKey()) { pendingStart = true; openKeyBox(); return; }
+  starting = true;
+  setStatus("включаю микрофон…");
+  const ctx = makeCtx(); // создаём сразу (в обработчике нажатия): иначе браузер может оставить звук на паузе
   ctx.resume().catch(() => {});
   try { audio = await startAudio(ctx); }
-  catch (e) { ctx.close(); setStatus("нет доступа к микрофону: " + e.message, "err"); return; }
+  catch (e) { starting = false; ctx.close().catch(() => {}); setStatus("нет доступа к микрофону: " + e.message, "err"); return; }
+  starting = false;
   bc?.postMessage("started");
-  running = true; failStreak = 0; queue = []; lastAudioAt = Date.now();
-  $("#toggle").textContent = "■ Стоп"; $("#toggle").className = "stop";
-  try { wakeLock = await navigator.wakeLock?.request("screen"); } catch {}
+  running = true; userStopped = false; autoPaused = false; failStreak = 0; queue = []; lastAudioAt = Date.now();
+  setRunningUI(true);
+  requestWakeLock();
+  if (!(await ensureAudioRunning())) return;
   connect();
 }
 
 function stop(graceful = true) {
   running = false;
   clearTimeout(reconnectTimer);
+  if (waitingTap) { const r = waitingTap; waitingTap = null; r(); }
+  $("#tapBox").hidden = true;
   if (audio) { audio.stop(); audio = null; }
+  configSent = false;
   if (ws) {
     const sock = ws;
     if (graceful && sock.readyState === WebSocket.OPEN) {
+      // даём Soniox ~2,5 с дослать последние слова и перевод
       try { sock.send(""); } catch {}
-      setTimeout(() => { try { sock.close(); } catch {} }, 3000);
-    } else { try { sock.close(); } catch {} }
-  }
+      setTimeout(() => { if (ws === sock) ws = null; try { sock.close(); } catch {} if (!running) flush(); }, 2500);
+    } else { ws = null; try { sock.close(); } catch {} flush(); }
+  } else flush();
   try { wakeLock?.release(); } catch {}
   wakeLock = null;
-  $("#toggle").textContent = "▶ Старт"; $("#toggle").className = "primary";
+  setRunningUI(false);
   if (!$("#status").classList.contains("err")) setStatus("остановлено");
-  setTimeout(() => { if (running) return; finals = finals.concat(nonFinal); nonFinal = []; render(); save(); }, 3500);
+}
+// недоделанные слова становятся окончательными, дальше — новая реплика
+function flush() {
+  if (nonFinal.length) { finals = finals.concat(nonFinal); nonFinal = []; }
+  if (finals.length && !finals[finals.length - 1].boundary) finals.push({ boundary: true, text: "" });
+  render(); save();
 }
 
-$("#toggle").onclick = () => { closeMore(); running ? stop() : start(); };
-$("#clear").onclick = () => {
-  if (!confirm("Начать новый разговор? Текущий исчезнет с экрана и из памяти браузера — если нужен, сначала «Скачать».")) return;
-  finals = []; nonFinal = []; sessionName = newSessionName(); render(); dirty = true; save();
-};
-$("#download").onclick = download;
+$("#toggle").onclick = () => { closeMore(); if (running) { userStopped = true; stop(); } else start(); };
+$("#clear").onclick = () => { closeMore(); newConversation(); setStatus(running ? "слушаю — новый разговор" : "новый разговор", running ? "live" : ""); };
+$("#download").onclick = () => downloadConv(currentConv());
 $("#moreBtn").onclick = () => {
   const open = $("header").classList.toggle("open");
   $("#moreBtn").setAttribute("aria-expanded", open);
 };
-const closeMore = () => { $("header").classList.remove("open"); $("#moreBtn").setAttribute("aria-expanded", false); };
+function closeMore() { $("header").classList.remove("open"); $("#moreBtn").setAttribute("aria-expanded", false); }
+
+// телефон: в фоне iOS всё равно отбирает микрофон — аккуратно останавливаемся и продолжаем по возвращении;
+// после долгого отсутствия начинаем новый разговор
+function onHidden() {
+  hiddenAt = Date.now();
+  dirty = true; save();
+  if (MOBILE && running) { stop(); autoPaused = true; }
+}
+function onVisible() {
+  const away = hiddenAt ? Date.now() - hiddenAt : 0;
+  hiddenAt = 0;
+  if (running) { requestWakeLock(); return; }
+  if (away > LONG_AWAY_MS) { newConversation(); userStopped = false; }
+  if (autoStartOn() && !userStopped && $("#keyBox").hidden) start();
+}
+document.addEventListener("visibilitychange", () => (document.hidden ? onHidden() : onVisible()));
+addEventListener("pageshow", (e) => { if (e.persisted && !document.hidden) onVisible(); });
 
 // ---------- ключ ----------
 let pendingStart = false;
+const KEY_HELP = "Хранится только в этом браузере на этом устройстве. Взять: console.soniox.com → API Keys.";
 function openKeyBox(msg) {
-  $("#keyMsg").textContent = msg || "Хранится только в этом браузере на этом устройстве. Взять: console.soniox.com → API Keys.";
+  $("#keyMsg").textContent = msg || KEY_HELP;
   $("#keyMsg").className = msg ? "err" : "";
   $("#keyInput").value = "";
   $("#keyInput").placeholder = getKey() ? "ключ сохранён — вставь новый, чтобы заменить" : "вставь ключ";
@@ -464,7 +677,7 @@ function openKeyBox(msg) {
 const closeKeyBox = () => { $("#keyBox").hidden = true; pendingStart = false; };
 $("#keyBtn").onclick = () => { closeMore(); openKeyBox(); };
 $("#keyCancel").onclick = closeKeyBox;
-$("#keyForget").onclick = () => { store.set("sonioxKey", ""); closeKeyBox(); setStatus("ключ удалён"); };
+$("#keyForget").onclick = () => { store.del("sonioxKey"); closeKeyBox(); setStatus("ключ удалён"); };
 $("#keySave").onclick = () => {
   const v = $("#keyInput").value.trim();
   if (!v) { $("#keyInput").focus(); return; }
@@ -475,21 +688,31 @@ $("#keySave").onclick = () => {
   if (go) start();
 };
 $("#keyInput").onkeydown = (e) => { if (e.key === "Enter") $("#keySave").click(); };
-restore();
-document.addEventListener("visibilitychange", async () => {
-  if (running && document.visibilityState === "visible" && !wakeLock) { try { wakeLock = await navigator.wakeLock?.request("screen"); } catch {} }
-});
 
-// ---------- демо без ключа: ?demo ----------
-if (location.search.includes("demo")) {
-  const tok = (text, lang, extra = {}) => ({ text, language: lang, is_final: true, translation_status: "original", speaker: lang === "ru" ? "1" : "2", ...extra });
+// ---------- при открытии: прошлый разговор — в историю, новый разговор, автостарт ----------
+if (!DEMO) {
+  try { archive(JSON.parse(store.get("conv", "null"))); } catch {}
+  store.del("conv");
+  render(); dirty = false;
+  if (autoStartOn() && !document.hidden) start();
+}
+
+// ---------- демо без ключа и микрофона: ?demo ----------
+if (DEMO) {
+  let ms = 0;
+  const tok = (text, lang, extra = {}) => {
+    const len = text.length * 60; const t = { text, language: lang, is_final: true, translation_status: "original",
+      speaker: lang === "ru" ? "1" : "2", start_ms: ms, end_ms: ms + len, ...extra }; ms += len + 200; return t; };
   const tr = (text, lang, src) => ({ text, language: lang, source_language: src, is_final: true, translation_status: "translation" });
+  const wait = (s) => { ms += s * 1000; return []; };
   const script = [
     [tok("Здравствуйте, ", "ru"), tok("у меня болит спина под левой лопаткой.", "ru")],
     [tok("<end>", "ru"), tr("Merhaba, sol kürek kemiğimin altında sırtım ağrıyor.", "tr", "ru")],
     [tok("Ne zamandan beri ", "tr"), tok("ağrınız var?", "tr"), tr("С какого времени у вас боль?", "ru", "tr")],
     [tok("Примерно с начала ноября. ", "ru"), tok("Хуже от холода.", "ru"), tr("Yaklaşık kasım başından beri. ", "tr", "ru")],
-    [tr("Soğukta daha kötü.", "tr", "ru"), tok("Boynunuzu sola çevirince ağrı artıyor mu?", "tr")],
+    [tr("Soğukta daha kötü.", "tr", "ru"), ...wait(4)],
+    [tok("И ещё немеют пальцы на левой руке.", "ru"), tr("Ayrıca sol elimin parmakları uyuşuyor.", "tr", "ru")],
+    [tok("Boynunuzu sola çevirince ağrı artıyor mu?", "tr")],
     [tr("Боль усиливается, когда поворачиваете шею влево?", "ru", "tr")],
   ];
   let i = 0;
