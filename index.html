@@ -1,0 +1,457 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Переводчик RU ⇄ TR</title>
+<style>
+  :root {
+    --bg: #0f1115; --panel: #181b22; --line: #2a2f3a;
+    --me: #1d3557; --them: #1e4634; --text: #f2f4f8; --muted: #9aa3b2;
+    --accent: #4f8cff; --danger: #e5534b; --ok: #3fb950; --fs: 28;
+  }
+  @media (prefers-color-scheme: light) {
+    :root { --bg: #f3f4f6; --panel: #ffffff; --line: #d9dde3;
+      --me: #dce8ff; --them: #d8f1e3; --text: #12151a; --muted: #5d6675;
+      --accent: #2563eb; --danger: #c93c37; --ok: #1a7f37; }
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text);
+    font: 16px/1.35 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+  body { display: flex; flex-direction: column; }
+  header { display: flex; gap: 10px; align-items: center; flex-wrap: wrap;
+    padding: 10px 14px; background: var(--panel); border-bottom: 1px solid var(--line); }
+  header label { color: var(--muted); font-size: 13px; display: flex; gap: 6px; align-items: center; }
+  select, input[type=text] { background: var(--bg); color: var(--text); border: 1px solid var(--line);
+    border-radius: 8px; padding: 6px 8px; font-size: 14px; }
+  input[type=text] { width: 110px; }
+  button { border: 0; border-radius: 10px; padding: 9px 16px; font-size: 15px; font-weight: 600;
+    cursor: pointer; background: var(--line); color: var(--text); }
+  button.primary { background: var(--accent); color: #fff; }
+  button.stop { background: var(--danger); color: #fff; }
+  #status { font-size: 13px; color: var(--muted); min-width: 160px; }
+  #status.err { color: var(--danger); }
+  #status.live { color: var(--ok); }
+  #meter { width: 70px; height: 8px; background: var(--line); border-radius: 4px; overflow: hidden; }
+  #meter > div { height: 100%; width: 0; background: var(--ok); transition: width .08s; }
+  .spacer { flex: 1; }
+  #log { flex: 1; overflow-y: auto; padding: 18px; display: flex; flex-direction: column; gap: 14px; }
+  .msg { max-width: 80%; padding: 10px 16px 12px; border-radius: 16px; }
+  .msg.me { align-self: flex-start; background: var(--me); border-bottom-left-radius: 4px; }
+  .msg.them { align-self: flex-end; background: var(--them); border-bottom-right-radius: 4px; }
+  .who { font-size: 12px; color: var(--muted); margin-bottom: 3px; }
+  .tr { font-size: calc(var(--fs) * 1px); font-weight: 600; white-space: pre-wrap; }
+  .orig { font-size: calc(var(--fs) * 0.6px); color: var(--muted); margin-top: 6px; white-space: pre-wrap; }
+  .msg.pending .tr::after { content: " …"; color: var(--muted); }
+  .tr:empty::before { content: "…"; color: var(--muted); }
+  #hint { color: var(--muted); text-align: center; margin: auto; max-width: 520px; font-size: 15px; }
+  @media (max-width: 640px) {
+    header { gap: 6px 8px; padding: 8px 10px; }
+    #status { min-width: 0; flex: 1 1 150px; }
+    #meter { width: 40px; }
+    .spacer { display: none; }
+    button { padding: 7px 12px; font-size: 14px; }
+    label:has(#model) { display: none; }
+    .msg { max-width: 92%; }
+    #log { padding: 12px; }
+  }
+  #keyBox { position: fixed; inset: 0; background: rgba(0,0,0,.55); display: flex; align-items: center;
+    justify-content: center; padding: 16px; z-index: 10; }
+  #keyBox[hidden] { display: none; }
+  #keyBox .card { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 18px;
+    width: 100%; max-width: 440px; display: flex; flex-direction: column; gap: 12px; }
+  #keyBox p { margin: 0; color: var(--muted); font-size: 14px; }
+  #keyBox p.err { color: var(--danger); }
+  #keyBox input { width: 100%; font-size: 16px; padding: 10px; background: var(--bg); color: var(--text);
+    border: 1px solid var(--line); border-radius: 8px; }
+  #keyBox .row { display: flex; gap: 8px; flex-wrap: wrap; }
+</style>
+</head>
+<body>
+<header>
+  <button id="toggle" class="primary">▶ Старт</button>
+  <div id="meter"><div></div></div>
+  <span id="status">остановлено</span>
+  <span class="spacer"></span>
+  <label>Я говорю <select id="langMe"></select></label>
+  <label>Собеседник <select id="langThem"></select></label>
+  <label>Шрифт <input id="fs" type="range" min="16" max="48" value="28"></label>
+  <label>Модель <input id="model" type="text" value="stt-rt-v6"></label>
+  <button id="download">⬇ Скачать</button>
+  <button id="clear">Новый</button>
+  <button id="keyBtn">Ключ</button>
+</header>
+<div id="log"><div id="hint">Нажми «Старт» и положи ноутбук или телефон между вами. Слева твои реплики (крупно — перевод для собеседника), справа — собеседника (крупно — перевод для тебя). Язык определяется сам, ничего переключать не нужно.</div></div>
+<div id="keyBox" hidden><div class="card">
+  <b>Ключ Soniox</b>
+  <p id="keyMsg">Хранится только в этом браузере на этом устройстве. Взять: console.soniox.com → API Keys.</p>
+  <input id="keyInput" type="password" autocomplete="off" data-1p-ignore data-lpignore="true" autocapitalize="off" spellcheck="false" placeholder="вставь ключ">
+  <div class="row"><button id="keySave" class="primary">Сохранить</button><button id="keyCancel">Отмена</button><span class="spacer"></span><button id="keyForget">Удалить ключ</button></div>
+</div></div>
+
+<script>
+const LANGS = { ru: "Русский", tr: "Türkçe", en: "English", uk: "Українська", de: "Deutsch", es: "Español", sl: "Slovenščina", th: "ไทย" };
+const WS_URL = "wss://stt-rt.soniox.com/transcribe-websocket";
+const $ = (s) => document.querySelector(s);
+const store = {
+  get(k, d) { try { return localStorage.getItem(k) ?? d; } catch { return d; } },
+  set(k, v) { try { localStorage.setItem(k, v); } catch {} },
+};
+
+for (const sel of [$("#langMe"), $("#langThem")])
+  for (const [code, name] of Object.entries(LANGS)) sel.add(new Option(`${name} (${code})`, code));
+$("#langMe").value = store.get("langMe", "ru");
+$("#langThem").value = store.get("langThem", "tr");
+$("#model").value = store.get("model", "stt-rt-v6");
+$("#fs").value = store.get("fs", "28");
+const applyFs = () => document.documentElement.style.setProperty("--fs", $("#fs").value);
+applyFs();
+$("#fs").oninput = () => { applyFs(); store.set("fs", $("#fs").value); };
+for (const id of ["langMe", "langThem", "model"]) $("#" + id).onchange = () => store.set(id, $("#" + id).value);
+
+// ---------- state ----------
+let running = false, ws = null, audio = null, wakeLock = null;
+let finals = [], nonFinal = [];
+let queue = [], configSent = false, authViaConfig = false, reconnectTimer = null, failStreak = 0;
+let dirty = false, lastAudioAt = 0, lastSentAt = 0, micWarn = false;
+const DEMO = location.search.includes("demo");
+const pad = (n) => String(n).padStart(2, "0");
+const newSessionName = (d = new Date()) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}_${pad(d.getHours())}-${pad(d.getMinutes())}`;
+let sessionName = newSessionName();
+const getKey = () => store.get("sonioxKey", "").trim();
+// только одна вкладка слушает микрофон: новая останавливает старую
+const bc = "BroadcastChannel" in window ? new BroadcastChannel("live-translator") : null;
+if (bc) bc.onmessage = (e) => { if (e.data === "started" && running) { stop(); setStatus("остановлено: запущено в другой вкладке", "err"); } };
+
+function setStatus(text, cls = "") { const s = $("#status"); s.textContent = text; s.className = cls; }
+
+// ---------- segments ----------
+function sideOf(lang) { return lang === $("#langMe").value ? "me" : "them"; }
+
+function buildSegments(tokens) {
+  const A = $("#langMe").value, B = $("#langThem").value;
+  const segs = [];
+  let cur = null, sawEnd = false;
+  for (const t of tokens) {
+    if (t.boundary) { cur = null; continue; }
+    if (t.text === "<end>" || t.text === "<fin>") { sawEnd = true; continue; }
+    if (t.translation_status === "translation") {
+      const src = t.source_language || (t.language === A ? B : A);
+      const side = sideOf(src);
+      for (let i = segs.length - 1; i >= 0 && i >= segs.length - 8; i--) {
+        if (segs[i].side === side) { segs[i].trans += t.text; if (!t.is_final) segs[i].pending = true; break; }
+      }
+      continue;
+    }
+    const blank = !t.text.trim();
+    const lang = t.language || (cur && cur.lang) || A;
+    const side = sideOf(lang);
+    const longAndEnded = cur && sawEnd && cur.orig.length > 350;
+    if (!cur || (!blank && (side !== cur.side || longAndEnded))) {
+      if (blank) continue;
+      cur = { side, lang, speaker: t.speaker, orig: "", trans: "", pending: false };
+      segs.push(cur);
+      sawEnd = false;
+    }
+    cur.orig += t.text;
+    if (!t.is_final) cur.pending = true;
+  }
+  for (const s of segs) { s.orig = s.orig.trim(); s.trans = s.trans.trim(); }
+  return segs;
+}
+
+// ---------- render ----------
+const nodes = [];
+function render() {
+  const log = $("#log");
+  const atBottom = log.scrollHeight - log.scrollTop - log.clientHeight < 80;
+  const segs = buildSegments(finals.concat(nonFinal));
+  if (segs.length && $("#hint")) $("#hint").remove();
+  const A = $("#langMe").value, B = $("#langThem").value;
+  segs.forEach((s, i) => {
+    let n = nodes[i];
+    if (!n) {
+      n = document.createElement("div");
+      n.innerHTML = '<div class="who"></div><div class="tr"></div><div class="orig"></div>';
+      log.appendChild(n); nodes[i] = n;
+    }
+    const cls = `msg ${s.side}${s.pending ? " pending" : ""}`;
+    if (n.className !== cls) n.className = cls;
+    const who = s.side === "me"
+      ? `Я · ${A} → ${B}`
+      : `Собеседник${s.speaker ? " " + s.speaker : ""} · ${s.lang} → ${A}`;
+    if (n.children[0].textContent !== who) n.children[0].textContent = who;
+    if (n.children[1].textContent !== s.trans) n.children[1].textContent = s.trans;
+    if (n.children[2].textContent !== s.orig) n.children[2].textContent = s.orig;
+  });
+  while (nodes.length > segs.length) nodes.pop().remove();
+  if (atBottom) log.scrollTop = log.scrollHeight;
+  dirty = true;
+}
+
+// ---------- сохранение: текущий разговор живёт в localStorage, «Скачать» отдаёт .md ----------
+function toMarkdown() {
+  const segs = buildSegments(finals.concat(nonFinal));
+  const lines = [`# Разговор ${sessionName.replace("_", " ")}`, ""];
+  for (const s of segs) {
+    lines.push(`**${s.side === "me" ? "Я" : "Собеседник"} (${s.lang}):** ${s.orig}`);
+    lines.push(`> ${s.trans || "—"}`, "");
+  }
+  return lines.join("\n");
+}
+function save() {
+  if (DEMO || !dirty) return;
+  dirty = false;
+  const segs = buildSegments(finals).map(({ side, lang, speaker, orig, trans }) => ({ lang, speaker, orig, trans }));
+  store.set("conv", JSON.stringify({ name: sessionName, segs }));
+}
+setInterval(save, 5000);
+function restore() {
+  if (DEMO) return;
+  let c; try { c = JSON.parse(store.get("conv", "null")); } catch { return; }
+  if (!c || !Array.isArray(c.segs) || !c.segs.length) return;
+  sessionName = c.name || sessionName;
+  const A = $("#langMe").value, B = $("#langThem").value;
+  for (const s of c.segs) {
+    finals.push({ text: s.orig, language: s.lang, speaker: s.speaker, is_final: true, translation_status: "original" });
+    if (s.trans) finals.push({ text: s.trans, source_language: s.lang, language: s.lang === A ? B : A, is_final: true, translation_status: "translation" });
+    finals.push({ boundary: true, text: "" });
+  }
+  render(); dirty = false;
+}
+function download() {
+  if (!finals.length && !nonFinal.length) { setStatus("разговор пустой — нечего скачивать", "err"); return; }
+  const url = URL.createObjectURL(new Blob([toMarkdown()], { type: "text/markdown;charset=utf-8" }));
+  const a = document.createElement("a");
+  a.href = url; a.download = `perevod_${sessionName}.md`;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 10000);
+}
+
+// ---------- audio ----------
+// ctx создаётся заранее, прямо в обработчике клика: иначе Chrome может оставить его на паузе
+function makeCtx() { try { return new AudioContext({ sampleRate: 16000 }); } catch { return new AudioContext(); } }
+async function startAudio(ctx) {
+  const stream = await navigator.mediaDevices.getUserMedia({
+    audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true, autoGainControl: true },
+  });
+  if (ctx.state !== "running") { try { await ctx.resume(); } catch {} }
+  const src = ctx.createMediaStreamSource(stream);
+  const proc = ctx.createScriptProcessor(2048, 1, 1);
+  const bar = $("#meter > div");
+  proc.onaudioprocess = (e) => {
+    lastAudioAt = Date.now();
+    const f = e.inputBuffer.getChannelData(0);
+    const pcm = new Int16Array(f.length);
+    let sum = 0;
+    for (let i = 0; i < f.length; i++) {
+      const s = Math.max(-1, Math.min(1, f[i]));
+      pcm[i] = s < 0 ? s * 0x8000 : s * 0x7fff;
+      sum += s * s;
+    }
+    bar.style.width = Math.min(100, Math.sqrt(sum / f.length) * 400) + "%";
+    sendAudio(pcm.buffer);
+  };
+  src.connect(proc); proc.connect(ctx.destination);
+  return {
+    ctx, stream, sampleRate: ctx.sampleRate,
+    stop() { proc.disconnect(); src.disconnect(); stream.getTracks().forEach((t) => t.stop()); ctx.close(); bar.style.width = "0"; },
+  };
+}
+
+// сторож: если звук перестал идти (Chrome приостановил аудио, сменился микрофон) — оживить;
+// keepalive не даёт Soniox закрыть сессию с 408, пока звука нет
+setInterval(async () => {
+  if (!running || !audio) return;
+  const now = Date.now();
+  if (now - lastAudioAt > 3000) {
+    micWarn = true;
+    setStatus("микрофон молчит — перезапускаю звук…", "err");
+    try { if (audio.ctx.state !== "running") await audio.ctx.resume(); } catch {}
+    const ended = audio.stream.getAudioTracks().every((t) => t.readyState === "ended");
+    if (running && (ended || now - lastAudioAt > 8000)) {
+      try { audio.stop(); } catch {}
+      lastAudioAt = Date.now();
+      try { audio = await startAudio(makeCtx()); }
+      catch (e) { setStatus("микрофон: " + e.message, "err"); }
+    }
+  } else if (micWarn && ws && ws.readyState === WebSocket.OPEN && configSent) {
+    micWarn = false;
+    setStatus("слушаю", "live");
+  }
+  if (ws && ws.readyState === WebSocket.OPEN && configSent && now - lastSentAt > 5000) {
+    try { ws.send(JSON.stringify({ type: "keepalive" })); lastSentAt = now; } catch {}
+  }
+}, 2000);
+
+function sendAudio(buf) {
+  if (ws && ws.readyState === WebSocket.OPEN && configSent) {
+    while (queue.length) ws.send(queue.shift());
+    ws.send(buf);
+    lastSentAt = Date.now();
+  } else if (running) {
+    queue.push(buf);
+    if (queue.length > 240) queue.shift(); // держим не больше ~30 c на время переподключения
+  }
+}
+
+// ---------- websocket ----------
+function connect() {
+  clearTimeout(reconnectTimer);
+  configSent = false;
+  if (!running) return;
+  const key = getKey();
+  if (!key) { stop(false); setStatus("нет ключа Soniox", "err"); openKeyBox(); return; }
+  setStatus("подключаюсь…");
+  if (ws) { const old = ws; ws = null; try { old.close(); } catch {} }
+  const sock = authViaConfig ? new WebSocket(WS_URL) : new WebSocket(WS_URL, ["soniox-api-key", key]);
+  ws = sock;
+  let opened = false;
+  sock.onopen = () => {
+    opened = true;
+    const A = $("#langMe").value, B = $("#langThem").value;
+    const cfg = {
+      model: $("#model").value.trim() || "stt-rt-v6",
+      audio_format: "pcm_s16le", sample_rate: audio.sampleRate, num_channels: 1,
+      language_hints: [A, B],
+      enable_language_identification: true,
+      enable_speaker_diarization: true,
+      enable_endpoint_detection: true,
+      translation: { type: "two_way", language_a: A, language_b: B },
+    };
+    if (authViaConfig) cfg.api_key = key;
+    sock.send(JSON.stringify(cfg));
+    configSent = true;
+    failStreak = 0;
+    setStatus("слушаю", "live");
+  };
+  sock.onmessage = (ev) => {
+    if (ws !== sock) return;
+    let msg; try { msg = JSON.parse(ev.data); } catch { return; }
+    if (msg.error_code || msg.error_message) {
+      const code = Number(msg.error_code);
+      const text = `Soniox ${code || ""}: ${msg.error_message || msg.error_type}`;
+      if ([400, 401, 402, 403].includes(code)) {
+        stop(false); setStatus(text, "err");
+        if (code === 401) openKeyBox("Ключ не подошёл (Soniox 401). Вставь действующий ключ.");
+      }
+      else setStatus(`${text} — переподключаюсь`, "err");
+      return;
+    }
+    const nf = [];
+    for (const t of msg.tokens || []) (t.is_final ? finals : nf).push(t);
+    nonFinal = nf;
+    render();
+  };
+  sock.onclose = () => {
+    if (ws !== sock) return;
+    configSent = false;
+    if (!opened && !authViaConfig) authViaConfig = true; // запасной способ передать ключ
+    if (running) {
+      finals = finals.concat(nonFinal); nonFinal = [];
+      finals.push({ boundary: true, text: "" });
+      render();
+      scheduleReconnect();
+    }
+  };
+  sock.onerror = () => {};
+}
+
+function scheduleReconnect() {
+  if (!running) return;
+  failStreak++;
+  const delay = Math.min(10000, 400 * failStreak);
+  if (!$("#status").classList.contains("err")) setStatus(`переподключаюсь через ${Math.round(delay / 1000)} c…`);
+  reconnectTimer = setTimeout(connect, delay);
+}
+
+// ---------- start / stop ----------
+async function start() {
+  if (running) return;
+  if ($("#langMe").value === $("#langThem").value) { setStatus("выбери два разных языка", "err"); return; }
+  if (!getKey()) { openKeyBox(); pendingStart = true; return; }
+  const ctx = makeCtx();
+  ctx.resume().catch(() => {});
+  try { audio = await startAudio(ctx); }
+  catch (e) { ctx.close(); setStatus("нет доступа к микрофону: " + e.message, "err"); return; }
+  bc?.postMessage("started");
+  running = true; failStreak = 0; queue = []; lastAudioAt = Date.now();
+  $("#toggle").textContent = "■ Стоп"; $("#toggle").className = "stop";
+  try { wakeLock = await navigator.wakeLock?.request("screen"); } catch {}
+  connect();
+}
+
+function stop(graceful = true) {
+  running = false;
+  clearTimeout(reconnectTimer);
+  if (audio) { audio.stop(); audio = null; }
+  if (ws) {
+    const sock = ws;
+    if (graceful && sock.readyState === WebSocket.OPEN) {
+      try { sock.send(""); } catch {}
+      setTimeout(() => { try { sock.close(); } catch {} }, 3000);
+    } else { try { sock.close(); } catch {} }
+  }
+  try { wakeLock?.release(); } catch {}
+  wakeLock = null;
+  $("#toggle").textContent = "▶ Старт"; $("#toggle").className = "primary";
+  if (!$("#status").classList.contains("err")) setStatus("остановлено");
+  setTimeout(() => { if (running) return; finals = finals.concat(nonFinal); nonFinal = []; render(); save(); }, 3500);
+}
+
+$("#toggle").onclick = () => (running ? stop() : start());
+$("#clear").onclick = () => {
+  if (!confirm("Начать новый разговор? Текущий исчезнет с экрана и из памяти браузера — если нужен, сначала «Скачать».")) return;
+  finals = []; nonFinal = []; sessionName = newSessionName(); render(); dirty = true; save();
+};
+$("#download").onclick = download;
+
+// ---------- ключ ----------
+let pendingStart = false;
+function openKeyBox(msg) {
+  $("#keyMsg").textContent = msg || "Хранится только в этом браузере на этом устройстве. Взять: console.soniox.com → API Keys.";
+  $("#keyMsg").className = msg ? "err" : "";
+  $("#keyInput").value = "";
+  $("#keyInput").placeholder = getKey() ? "ключ сохранён — вставь новый, чтобы заменить" : "вставь ключ";
+  $("#keyBox").hidden = false;
+  $("#keyInput").focus();
+}
+const closeKeyBox = () => { $("#keyBox").hidden = true; pendingStart = false; };
+$("#keyBtn").onclick = () => openKeyBox();
+$("#keyCancel").onclick = closeKeyBox;
+$("#keyForget").onclick = () => { store.set("sonioxKey", ""); closeKeyBox(); setStatus("ключ удалён"); };
+$("#keySave").onclick = () => {
+  const v = $("#keyInput").value.trim();
+  if (!v) { $("#keyInput").focus(); return; }
+  store.set("sonioxKey", v);
+  const go = pendingStart;
+  closeKeyBox();
+  setStatus("ключ сохранён");
+  if (go) start();
+};
+$("#keyInput").onkeydown = (e) => { if (e.key === "Enter") $("#keySave").click(); };
+restore();
+document.addEventListener("visibilitychange", async () => {
+  if (running && document.visibilityState === "visible" && !wakeLock) { try { wakeLock = await navigator.wakeLock?.request("screen"); } catch {} }
+});
+
+// ---------- демо без ключа: ?demo ----------
+if (location.search.includes("demo")) {
+  const tok = (text, lang, extra = {}) => ({ text, language: lang, is_final: true, translation_status: "original", speaker: lang === "ru" ? "1" : "2", ...extra });
+  const tr = (text, lang, src) => ({ text, language: lang, source_language: src, is_final: true, translation_status: "translation" });
+  const script = [
+    [tok("Здравствуйте, ", "ru"), tok("у меня болит спина под левой лопаткой.", "ru")],
+    [tok("<end>", "ru"), tr("Merhaba, sol kürek kemiğimin altında sırtım ağrıyor.", "tr", "ru")],
+    [tok("Ne zamandan beri ", "tr"), tok("ağrınız var?", "tr"), tr("С какого времени у вас боль?", "ru", "tr")],
+    [tok("Примерно с начала ноября. ", "ru"), tok("Хуже от холода.", "ru"), tr("Yaklaşık kasım başından beri. ", "tr", "ru")],
+    [tr("Soğukta daha kötü.", "tr", "ru"), tok("Boynunuzu sola çevirince ağrı artıyor mu?", "tr")],
+    [tr("Боль усиливается, когда поворачиваете шею влево?", "ru", "tr")],
+  ];
+  let i = 0;
+  const step = () => { if (i >= script.length) return; finals.push(...script[i++]); nonFinal = []; render(); setTimeout(step, 700); };
+  setStatus("демо-режим, без микрофона");
+  step();
+}
+</script>
+</body>
+</html>
