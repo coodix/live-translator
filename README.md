@@ -6,7 +6,9 @@
 
 ## Запуск
 
-1. Открыть `index.html` в Chrome (двойной клик по файлу) или с любого HTTPS-хостинга.
+1. Открыть https://coodix.github.io/live-translator/ (iPhone, любой браузер) или локально
+   `index.html` в Chrome (двойной клик по файлу). Сайт — GitHub Pages из репозитория
+   `coodix/live-translator`: обновить = `git push` в `main`.
 2. «Старт» → при первом запуске спросит ключ Soniox (console.soniox.com → API Keys).
    На Маке ключ уже лежит в Связке, скопировать его в буфер:
    `security find-generic-password -s soniox-api-key -w | pbcopy` → вставить в окно «Ключ».
