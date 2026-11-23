@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Ссылки на переводчик</title>
+<style>
+  :root { --bg: #f3f4f6; --panel: #fff; --line: #d9dde3; --text: #12151a; --muted: #5d6675; --accent: #2563eb; }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #0f1115; --panel: #181b22; --line: #2a2f3a; --text: #f2f4f8; --muted: #9aa3b2; --accent: #4f8cff; }
+  }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 17px/1.4 -apple-system, BlinkMacSystemFont, sans-serif;
+    padding: max(16px, env(safe-area-inset-top)) 16px max(24px, env(safe-area-inset-bottom)); }
+  h1 { font-size: 22px; margin: 0 0 6px; }
+  p { color: var(--muted); margin: 0 0 16px; font-size: 15px; }
+  a.btn { display: block; background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 14px 16px;
+    margin: 10px 0; color: var(--text); text-decoration: none; }
+  a.btn b { color: var(--accent); }
+  a.btn code { display: block; color: var(--muted); font-size: 13px; margin-top: 4px; word-break: break-all; }
+  h2 { font-size: 17px; margin: 24px 0 4px; }
+</style>
+</head>
+<body>
+<h1>Открыть переводчик</h1>
+<p>Проба схемы <code>webapp://</code>: должна открыть иконку с экрана «Домой», а не вкладку Safari.
+Нажимай по очереди и смотри, что откроется. Путь после адреса iOS, по отзывам, игнорирует.</p>
+
+<a class="btn" href="webapp://coodix.github.io/live-translator/"><b>1. webapp — папка сайта</b><code>webapp://coodix.github.io/live-translator/</code></a>
+<a class="btn" href="webapp://coodix.github.io/live-translator/?start"><b>2. webapp — папка + ?start</b><code>webapp://coodix.github.io/live-translator/?start</code></a>
+<a class="btn" href="webapp://coodix.github.io/live-translator/index.html"><b>3. webapp — index.html</b><code>webapp://coodix.github.io/live-translator/index.html</code></a>
+<a class="btn" href="webapp://coodix.github.io/"><b>4. webapp — только домен</b><code>webapp://coodix.github.io/</code></a>
+
+<h2>Запасной вариант</h2>
+<a class="btn" href="https://coodix.github.io/live-translator/?start"><b>5. Обычная ссылка (вкладка Safari)</b><code>https://coodix.github.io/live-translator/?start</code></a>
+
+<p style="margin-top:20px">Сработавшую ссылку вставь в «Команды» → «Открыть URL» и назначь команду на Action Button.</p>
+</body>
+</html>
